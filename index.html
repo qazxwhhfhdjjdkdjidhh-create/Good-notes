@@ -5,7 +5,6 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <title>دفتر</title>
-<link href="https://fonts.googleapis.com/css2?family=Readex+Pro:wght@300;400;600&display=swap" rel="stylesheet">
 <style>
 :root{--bg:#e9ebf8;--ink:#12142a;--mute:#5d6280;--glass:rgba(255,255,255,.97);--line:rgba(18,20,42,.14);--a1:#7c3aed;--a2:#0ea5e9;--on:#fff;--card:#fff;color-scheme:light}
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#07080d;--ink:#eef0ff;--mute:#8b90a8;--glass:rgba(18,20,32,.97);--line:rgba(255,255,255,.13);--a1:#8b5cf6;--a2:#22d3ee;--card:#12141f;color-scheme:dark}}
@@ -88,6 +87,7 @@ input[type=range]{width:78px;flex:none;accent-color:var(--a1)}
 </style>
 <meta name="theme-color" content="#f7f6f2">
 <meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="دفتر">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icon.svg">
@@ -387,23 +387,24 @@ async function endSel(S){
  if(!S.pk.length){clearBoxes();return;}
  boxes(S);var txt=S.pk.map(function(j){return it[j].s;}).join(' ').replace(/\s+/g,' ').trim();if(txt)openHud(txt);}
 async function webTranslate(text,lang){
- var code={Arabic:'ar',English:'en',French:'fr',Spanish:'es',German:'de',Turkish:'tr'}[lang]||'ar';
- var q=String(text||'').trim();if(!q)return '';
- var u='https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl='+encodeURIComponent(code)+'&dt=t&q='+encodeURIComponent(q);
- var r=await fetch(u);if(!r.ok)throw new Error('translate');
- var d=await r.json(),o='';
- if(d&&d[0])d[0].forEach(function(x){if(x&&x[0])o+=x[0];});
- return o||q;
+ var code={Arabic:'ar',English:'en',French:'fr',Spanish:'es',German:'de',Turkish:'tr'}[lang]||'en';
+ var q=String(text||'').trim(); if(!q)return '';
+ var url='https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl='+encodeURIComponent(code)+'&dt=t&q='+encodeURIComponent(q);
+ var res=await fetch(url,{method:'GET'});
+ if(!res.ok)throw new Error('translate_http_'+res.status);
+ var data=await res.json(),out='';
+ if(data&&data[0])data[0].forEach(function(x){if(x&&x[0])out+=x[0];});
+ return out||q;
 }
-async function getSample(){return async function(prompt,opt){
- var i=prompt.lastIndexOf('
-
-'),t=i>=0?prompt.slice(i+2):prompt;
- var m=prompt.match(/into ([A-Za-z]+)\./),l=m?m[1]:'Arabic';
- var x=await webTranslate(t,l);
- if(opt&&opt.onText)opt.onText({text:x});
- return {text:x};
-};}
+async function getSample(){
+ return async function(prompt,opt){
+  var marker='\n\n',i=prompt.lastIndexOf(marker),text=i>=0?prompt.slice(i+marker.length):prompt;
+  var m=prompt.match(/into ([A-Za-z]+)\./),lang=m?m[1]:'English';
+  var translated=await webTranslate(text,lang);
+  if(opt&&opt.onText)opt.onText({text:translated});
+  return {text:translated};
+ };
+}
 function openHud(t){lastText=t;$('hud').hidden=false;$('hOrig').textContent=t.length>260?t.slice(0,260)+'…':t;runTr();}
 function closeHud(){$('hud').hidden=true;if(trCtl){trCtl.abort();trCtl=null;}clearBoxes();}
 async function runTr(){
@@ -470,16 +471,21 @@ $('file').onchange=async function(){
    if(empty){doc.pages=np;at=0;}else{doc.pages.splice.apply(doc.pages,[doc.cur+1,0].concat(np));at=doc.cur+1;}
    structural(at);toast('تمت إضافة '+np.length+' صفحة',2000);}
  }catch(err){toast('تعذّر فتح الملف',3000);}};
-async function getDl(){return{save:async function(o){
- var b=o.data instanceof Blob?o.data:new Blob([o.data]);
- var f=new File([b],o.filename||'دفتر',{type:b.type||'application/octet-stream'});
- if(navigator.share&&navigator.canShare&&navigator.canShare({files:[f]})){
-  await navigator.share({files:[f],title:o.filename||'دفتر'});return;
- }
- var u=URL.createObjectURL(b),a=document.createElement('a');
- a.href=u;a.download=o.filename||'دفتر';document.body.appendChild(a);a.click();a.remove();
- setTimeout(function(){URL.revokeObjectURL(u)},1200);
-}};}
+async function getDl(){
+ return {
+  save:async function(o){
+   var blob=o.data instanceof Blob?o.data:new Blob([o.data]);
+   var file=new File([blob],o.filename||'دفتر',{type:blob.type||'application/octet-stream'});
+   if(navigator.share&&navigator.canShare&&navigator.canShare({files:[file]})){
+    await navigator.share({files:[file],title:o.filename||'دفتر'});
+    return;
+   }
+   var u=URL.createObjectURL(blob),a=document.createElement('a');
+   a.href=u;a.download=o.filename||'دفتر';document.body.appendChild(a);a.click();a.remove();
+   setTimeout(function(){URL.revokeObjectURL(u);},1500);
+  }
+ };
+}
 function safe(t){return (t||'').replace(/[\\\/:*?"<>|]+/g,'').trim()||'دفتر';}
 function buildPdf(im){var enc=new TextEncoder(),parts=[],off=[],len=0;
  function w(x){var b=typeof x==='string'?enc.encode(x):x;parts.push(b);len+=b.length;}
@@ -554,8 +560,11 @@ async function openNb(id){
 })();
 </script>
 <script>
-if('serviceWorker' in navigator){
- window.addEventListener('load',function(){navigator.serviceWorker.register('./sw.js').catch(function(){});});
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', function () {
+    navigator.serviceWorker.register('./sw.js').catch(function(){});
+  });
 }
-</script></body>
+</script>
+</body>
 </html>
